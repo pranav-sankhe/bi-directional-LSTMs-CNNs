@@ -22,8 +22,8 @@ config = tf.ConfigProto( device_count = {'GPU': 4 } )
 sess = tf.Session(config=config) 
 keras.backend.set_session(sess)
 
-INPUT_SIZE = 30*15
-OUTPUT_SIZE = 60
+INPUT_SIZE = 30*54           # INPUT_SIZE[0] = max_frame_length || INPUT_SIZE[1] = 18 points * 3 co-ordinates      
+OUTPUT_SIZE = 60			 		
 FULLY_CONNECTED_SIZE = 512
 HIDDEN_LAYER_1 = 256 
 HIDDEN_LAYER_2 = 256
