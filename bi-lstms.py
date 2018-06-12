@@ -8,32 +8,25 @@ output = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
 '''
 
 import numpy as np
-import tensorflow as tf
-import keras
 from keras.models import Sequential
 from keras.layers import LSTM
 from keras.layers import Dense
 from keras.layers import TimeDistributed
 from keras.layers import Bidirectional 
-from keras.layers import BatchNormalization, Dropout
-
+from keras.layers import BatchNormalization
 # create a sequence classification instance
-config = tf.ConfigProto( device_count = {'GPU': 4 } ) 
-sess = tf.Session(config=config) 
-keras.backend.set_session(sess)
+from keras import backend as K
+K.tensorflow_backend._get_available_gpus()
 
-INPUT_SIZE = 30*54           # INPUT_SIZE[0] = max_frame_length || INPUT_SIZE[1] = 18 points * 3 co-ordinates      
-OUTPUT_SIZE = 60			 		
-FULLY_CONNECTED_SIZE = 512
-HIDDEN_LAYER_1 = 256 
-HIDDEN_LAYER_2 = 256
+INPUT_SIZE = 10
+OUTPUT_SIZE = 1
+HIDDEN_LAYER_1 = 30
+HIDDEN_LAYER_2 = 20
 
-
-# sample data creator to check the code
 
 def get_sequence(input_size):
 	# create a sequence of random numbers in [0,1]
-	X = np.random.rand(input_size)
+	X = np.random.rand(10)
 	
 	# calculate cut-off value to change class values
 	limit = input_size/4.0
@@ -47,39 +40,40 @@ def get_sequence(input_size):
 	return X, y
 
 
+# define problem properties
 
-# define Model
 
-# gru = GRU(units, activation='tanh', recurrent_activation='hard_sigmoid', use_bias=True, kernel_initializer='glorot_uniform', 
-# 						recurrent_initializer='orthogonal', bias_initializer='zeros', kernel_regularizer=None, recurrent_regularizer=None, 
-# 						bias_regularizer=None, activity_regularizer=None, kernel_constraint=None, recurrent_constraint=None, bias_constraint=None, 
-# 						dropout=0.0, recurrent_dropout=0.0, implementation=1, return_sequences=False, return_state=False, go_backwards=False, stateful=False, 
-# 						unroll=False, reset_after=False)
+'''
+We will define the sequences as having 10 timesteps.
+Next, we can define an LSTM for the problem. The input layer will have 10 timesteps with 1 feature a piece, input_shape=(10, 1).
 
-# lstm = LSTM(units, activation='tanh', recurrent_activation='hard_sigmoid', use_bias=True, kernel_initializer='glorot_uniform', recurrent_initializer='orthogonal', 
-# 						bias_initializer='zeros', unit_forget_bias=True, kernel_regularizer=None, recurrent_regularizer=None, bias_regularizer=None, activity_regularizer=None, 
-# 						kernel_constraint=None, recurrent_constraint=None, bias_constraint=None, dropout=0.0, recurrent_dropout=0.0, implementation=1, return_sequences=False, 
-# 						return_state=False, go_backwards=False, stateful=False, unroll=False)
+The first hidden layer will have 20 memory units and the output layer will be a fully connected layer that outputs one value per timestep. 
+A sigmoid activation function is used on the output to predict the binary value.
 
+A TimeDistributed wrapper layer is used around the output layer so that one value per timestep can be predicted given the full sequence provided as input. 
+This requires that the LSTM hidden layer returns a sequence of values (one per timestep) rather than a single value for the whole input sequence.
+
+Finally, because this is a binary classification problem, the binary log loss (binary_crossentropy in Keras) is used. 
+The efficient ADAM optimization algorithm is used to find the weights and the accuracy metric is calculated and reported each epoch.
+'''
+
+
+
+# define LSTM
 model = Sequential()
-
-model.add(Bidirectional(LSTM(HIDDEN_LAYER_1, return_sequences=True), input_shape=(INPUT_SIZE, 1)))
+model.add(Bidirectional(LSTM(HIDDEN_LAYER_1, return_sequences=True), input_shape=(10,1)))
 model.add(BatchNormalization())
 model.add(Bidirectional(LSTM(HIDDEN_LAYER_2, return_sequences=True)))
 model.add(BatchNormalization())
-model.add(Dropout(0.5))
-model.add(TimeDistributed(Dense(OUTPUT_SIZE, activation='relu')))    #Fully Connected layer
+model.add(TimeDistributed(Dense(OUTPUT_SIZE, activation='sigmoid')))    #Fully Connected layer
 
-rmsprop = keras.optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=None, decay=0.9)
-
-
-model.compile(loss='categorical_crossentropy', optimizer=rmsprop, metrics=['acc'])
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['acc'])
 
 
 for epoch in range(1000):
 	# generate new random sequence
 	X,y = get_sequence(INPUT_SIZE)
-	
+	print X.shape, y.shape
 	# fit model for one epoch on this sequence
 	model.fit(X, y, epochs=1, batch_size=1, verbose=2)
 
@@ -88,4 +82,4 @@ for epoch in range(1000):
 # X,y = get_sequence(INPUT_SIZE)
 # yhat = model.predict_classes(X, verbose=0)
 # for i in range(n_timesteps):
-# 	print('Expected:', y[0, i], 'Predicted', yhat[0, i])	
+# 	print('Expected:', y[0, i], 'Predicted', yhat[0, i]
