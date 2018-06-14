@@ -1,10 +1,10 @@
 import tensorflow as tf
 import numpy as np
-
+import pandas as pd
 FC_SIZE = 1024
 DTYPE = tf.float32
 
-BATCH_SIZE = 32
+BATCH_SIZE = 1
 NUM_EPOCHS = 100
 IMG_HEIGHT = 220
 IMG_WIDTH = 220 
@@ -23,7 +23,7 @@ def _bias_variable(name, shape):
 def model(inputs_vid):       
     prev_layer = inputs_vid
 
-    in_filters = 1
+    in_filters = 2
     with tf.variable_scope('conv1_vid') as scope:                                                          # name of the block  
         out_filters = 16                                                                               # number of input channels for conv1     
         kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])                       # (kernels = filters as defined in TF doc). kernel size = 5 (5*5*5) 
@@ -101,16 +101,79 @@ def model(inputs_vid):
         biases = _bias_variable('biases', [FC_SIZE])
         local4_vid = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
 
-    print local4_vid    
-        
+    local4_vid = tf.reshape(local4_vid, [BATCH_SIZE, FC_SIZE, 1])
+
     lstm_cell = tf.contrib.rnn.BasicLSTMCell(200, forget_bias=1.0, state_is_tuple=True)
-    init_state = lstm_cell.zero_state(32, tf.float32)
-    rnn_outputs, final_state = tf.nn.static_rnn(lstm_cell, local4_vid, initial_state=init_state)
+    init_state = lstm_cell.zero_state(BATCH_SIZE, tf.float32)
+    rnn_outputs, final_state = tf.nn.dynamic_rnn(lstm_cell, local4_vid, initial_state=init_state)
 
     print rnn_outputs
     print final_state
     
 
-data = np.random.rand(32,100,256,256,1)
-data = data.astype(np.float32)
-model(data)        
+# data = np.random.rand(1,858,256,256,2)
+# data = data.astype(np.float32)
+# model(data)        
+
+
+def word_to_int():
+    filepath = 'label.csv'
+    data = pd.read_csv(filepath, header=None, names=['0','1','2'])
+    data = data.values
+    data = data[:,(1,2)]
+
+EMBEDDING_SIZE = 512
+
+def embeddings():
+    # Embedding
+    embedding_decoder = variable_scope.get_variable(
+        "embedding_encoder", [VOCAB_SIZE, EMBEDDING_SIZE])
+    # Look up embedding:
+    #   encoder_inputs: [max_time, batch_size]
+    #   encoder_emb_inp: [max_time, batch_size, embedding_size]
+    decoder_emb_inp = embedding_ops.embedding_lookup(
+        embedding_encoder, decoder_inputs)
+    return decoder_emb_inp
+
+
+word_to_int()
+
+
+# Build RNN cell
+num_units = 1024
+decoder_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
+
+# Helper
+helper = tf.contrib.seq2seq.TrainingHelper(
+    decoder_emb_inp, decoder_lengths, time_major=True)
+# Decoder
+decoder = tf.contrib.seq2seq.BasicDecoder(
+    decoder_cell, helper, encoder_state,
+    output_layer=projection_layer)
+# Dynamic decoding
+outputs, _ = tf.contrib.seq2seq.dynamic_decode(decoder, ...)
+logits = outputs.rnn_output
+
+
+
+projection_layer = layers_core.Dense(
+    tgt_vocab_size, use_bias=False)
+
+crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(
+    labels=decoder_outputs, logits=logits)
+train_loss = (tf.reduce_sum(crossent * target_weights) /
+    batch_size)
+
+
+
+# Calculate and clip gradients
+params = tf.trainable_variables()
+gradients = tf.gradients(train_loss, params)
+clipped_gradients, _ = tf.clip_by_global_norm(
+    gradients, max_gradient_norm)
+
+
+# Optimization
+optimizer = tf.train.AdamOptimizer(learning_rate)
+update_step = optimizer.apply_gradients(
+    zip(clipped_gradients, params))
