@@ -103,9 +103,20 @@ def model(inputs_vid):
 
     local4_vid = tf.reshape(local4_vid, [BATCH_SIZE, FC_SIZE, 1])
 
-    lstm_cell = tf.contrib.rnn.BasicLSTMCell(200, forget_bias=1.0, state_is_tuple=True)
-    init_state = lstm_cell.zero_state(BATCH_SIZE, tf.float32)
-    rnn_outputs, final_state = tf.nn.dynamic_rnn(lstm_cell, local4_vid, initial_state=init_state)
+    # Build RNN cell
+    encoder_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units)
+
+    # Run Dynamic RNN
+    #   encoder_outputs: [max_time, batch_size, num_units]
+    #   encoder_state: [batch_size, num_units]
+    encoder_outputs, encoder_state = tf.nn.dynamic_rnn(
+        encoder_cell, encoder_emb_inp,
+        sequence_length=source_sequence_length, time_major=True)
+
+
+    # lstm_cell = tf.contrib.rnn.BasicLSTMCell(200, forget_bias=1.0, state_is_tuple=True)
+    # init_state = lstm_cell.zero_state(BATCH_SIZE, tf.float32)
+    # rnn_outputs, final_state = tf.nn.dynamic_rnn(lstm_cell, local4_vid, initial_state=init_state)
 
     print rnn_outputs
     print final_state
@@ -151,7 +162,7 @@ decoder = tf.contrib.seq2seq.BasicDecoder(
     decoder_cell, helper, encoder_state,
     output_layer=projection_layer)
 # Dynamic decoding
-outputs, _ = tf.contrib.seq2seq.dynamic_decode(decoder, ...)
+outputs, _ = tf.contrib.seq2seq.dynamic_decode(decoder)
 logits = outputs.rnn_output
 
 
@@ -177,3 +188,32 @@ clipped_gradients, _ = tf.clip_by_global_norm(
 optimizer = tf.train.AdamOptimizer(learning_rate)
 update_step = optimizer.apply_gradients(
     zip(clipped_gradients, params))
+
+
+
+sess.run(tf.global_variables_initializer())
+
+
+
+max_batches = 3001
+batches_in_epoch = 1000
+
+try:
+    for batch in range(max_batches):
+        fd = next_feed()
+        _, l = sess.run([train_op, loss], fd)
+        loss_track.append(l)
+
+        if batch == 0 or batch % batches_in_epoch == 0:
+            print('batch {}'.format(batch))
+            print('  minibatch loss: {}'.format(sess.run(loss, fd)))
+            predict_ = sess.run(decoder_prediction, fd)
+            for i, (inp, pred) in enumerate(zip(fd[encoder_inputs].T, predict_.T)):
+                print('  sample {}:'.format(i + 1))
+                print('    input     > {}'.format(inp))
+                print('    predicted > {}'.format(pred))
+                if i >= 2:
+                    break
+            print()
+except KeyboardInterrupt:
+    print('training interrupted')
